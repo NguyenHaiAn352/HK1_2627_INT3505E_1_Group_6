@@ -1,0 +1,592 @@
+openapi: 3.0.0
+info:
+  title: Book Managing API
+  description: An OpenAPi used for keeping track of books.
+  contact:
+    email: you@your-company.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+servers:
+- url: https://virtserver.swaggerhub.com/none-6dd-3eb/BookManager/1.0.0
+  description: SwaggerHub API Auto Mocking
+- url: http://127.0.0.1:5000
+  description: Local server
+tags:
+- name: admins
+  description: Operations reserved for administrators.
+- name: public
+  description: Operations available for public uses.
+paths:
+  /books:
+    get:
+      tags:
+      - public
+      summary: "Return all the books inside the database. Queries can use 'fields' and 'sort', as well as be paginated via 'limit' and 'cursor'"
+      operationId: listBooks
+      parameters:
+      - name: limit
+        in: query
+        description: Maximum number of books to return per page.
+        required: false
+        schema:
+          minimum: 1
+          type: integer
+          default: 10
+        example: 10
+      - name: cursor
+        in: query
+        description: Pointer to the last item of the page.
+        required: false
+        schema:
+          type: string
+          format: uuid
+        example: fa8a0e9f-70ad-4940-9571-8ebfdcf00d20
+      - name: fields
+        in: query
+        description: Field(s) (or column(s)) of the table to be returned.
+        required: false
+        schema:
+          type: array
+          example:
+          - name
+          - id
+          items:
+            type: string
+      - name: sort
+        in: query
+        description: Field(s) for the table to be reordered to accordingly
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+      responses:
+        "200":
+          description: Successfully retrieved the book list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookPage"
+        "400":
+          description: Bad request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /unauthorized
+                title: Unauthorized
+                status: 401
+                detail: Authentication is required and has failed or has not yet been provided.
+                instance: /books
+        "500":
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: internal-server-error
+                title: Internal server error.
+                status: 500
+                detail: An unexpected condition was encountered and the server could not resolve it.
+                instance: /books
+    post:
+      tags:
+      - admins
+      summary: Add a book to the database. Required to provide book's id and name.
+      operationId: createBook
+      requestBody:
+        description: Information of the book about to be added.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookInput"
+        required: true
+      responses:
+        "201":
+          description: Booked addted to the database successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Bad request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /unauthorized
+                title: Unauthorized
+                status: 401
+                detail: Authentication is required and has failed or has not yet been provided.
+                instance: /books
+        "403":
+          description: Forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /forbidden
+                title: Forbidden
+                status: 403
+                detail: You are not allowed to perform this action
+                instance: /books
+        "409":
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /conflict
+                title: Conflict.
+                status: 409
+                detail: Conflict between the request and internal server state.
+                instance: /books
+        "500":
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /internal-server-error
+                title: Internal server error.
+                status: 500
+                detail: An unexpected condition was encountered and the server could not resolve it.
+                instance: /books
+      security:
+      - bearerAuth: []
+  /books/{bookId}:
+    get:
+      tags:
+      - public
+      summary: Retrieve a book by ID
+      description: Get detailed information about a specific book.
+      operationId: getBook
+      parameters:
+      - name: bookId
+        in: path
+        description: ID of a single book
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 85d132be-8d1a-42bc-ba9c-8ed6d87d5709
+      responses:
+        "200":
+          description: Book retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "404":
+          description: Book not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /not-found
+                title: Not Found
+                status: 404
+                detail: The specified book could not be found.
+                instance: "/books/{bookId}"
+        "500":
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /internal-server-error
+                title: Internal Server Error
+                status: 500
+                detail: An unexpected condition was encountered and the server could not resolve it.
+                instance: "/books/{bookId}"
+    put:
+      tags:
+      - admins
+      summary: Replace a book
+      description: Replace all information of a book by bookId.
+      operationId: replaceBook
+      parameters:
+      - name: bookId
+        in: path
+        description: ID of a single book
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 85d132be-8d1a-42bc-ba9c-8ed6d87d5709
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookInput"
+        required: true
+      responses:
+        "200":
+          description: Book replaced successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Bad request — invalid input
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /bad-request
+                title: Bad Request
+                status: 400
+                detail: Invalid or missing bookId parameter.
+                instance: "/books/{bookId}"
+        "401":
+          description: Unauthorized — authentication required
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /unauthorized
+                title: Unauthorized
+                status: 401
+                detail: Authentication credentials are missing or invalid.
+                instance: "/books/{bookId}"
+        "403":
+          description: Forbidden — insufficient permissions
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /forbidden
+                title: Forbidden
+                status: 403
+                detail: You are not allowed to modify this book.
+                instance: "/books/{bookId}"
+        "404":
+          description: Book not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /not-found
+                title: Not Found
+                status: 404
+                detail: The specified book could not be found.
+                instance: "/books/{bookId}"
+        "500":
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /internal-server-error
+                title: Internal Server Error
+                status: 500
+                detail: An unexpected condition was encountered and the server could not resolve it.
+                instance: "/books/{bookId}"
+      security:
+      - bearerAuth: []
+    delete:
+      tags:
+      - admins
+      summary: Delete a book
+      description: Remove a book from the system by bookId.
+      operationId: deleteBook
+      parameters:
+      - name: bookId
+        in: path
+        description: ID of a single book
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 85d132be-8d1a-42bc-ba9c-8ed6d87d5709
+      responses:
+        "204":
+          description: Book deleted successfully
+        "400":
+          description: Bad request — invalid input
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /bad-request
+                title: Bad Request
+                status: 400
+                detail: Invalid or missing bookId parameter.
+                instance: "/books/{bookId}"
+        "401":
+          description: Unauthorized — authentication required
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /unauthorized
+                title: Unauthorized
+                status: 401
+                detail: Authentication credentials are missing or invalid.
+                instance: "/books/{bookId}"
+        "403":
+          description: Forbidden — insufficient permissions
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /forbidden
+                title: Forbidden
+                status: 403
+                detail: You are not allowed to delete this book.
+                instance: "/books/{bookId}"
+        "404":
+          description: Book not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /not-found
+                title: Not Found
+                status: 404
+                detail: The specified book could not be found.
+                instance: "/books/{bookId}"
+        "500":
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /internal-server-error
+                title: Internal Server Error
+                status: 500
+                detail: An unexpected condition was encountered and the server could not resolve it.
+                instance: "/books/{bookId}"
+      security:
+      - bearerAuth: []
+    patch:
+      tags:
+      - admins
+      summary: Update part of a book
+      description: Partially update book information by bookId.
+      operationId: updateBook
+      parameters:
+      - name: bookId
+        in: path
+        description: ID of a single book
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 85d132be-8d1a-42bc-ba9c-8ed6d87d5709
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookInput"
+        required: true
+      responses:
+        "200":
+          description: Book updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        "400":
+          description: Bad request — invalid input
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /bad-request
+                title: Bad Request
+                status: 400
+                detail: Invalid or missing information.
+                instance: "/books/{bookId}"
+        "401":
+          description: Unauthorized — authentication required
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /unauthorized
+                title: Unauthorized
+                status: 401
+                detail: Authentication credentials are missing or invalid.
+                instance: "/books/{bookId}"
+        "403":
+          description: Forbidden — insufficient permissions
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /forbidden
+                title: Forbidden
+                status: 403
+                detail: You are not allowed to update this book.
+                instance: "/books/{bookId}"
+        "404":
+          description: Book not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /not-found
+                title: Not Found
+                status: 404
+                detail: The specified book could not be found.
+                instance: "/books/{bookId}"
+        "500":
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                type: /internal-server-error
+                title: Internal Server Error
+                status: 500
+                detail: An unexpected condition was encountered and the server could not resolve it.
+                instance: "/books/{bookId}"
+      security:
+      - bearerAuth: []
+components:
+  schemas:
+    Book:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          minLength: 5
+          type: string
+        author:
+          minLength: 5
+          type: string
+      example:
+        id: 85d132be-8d1a-42bc-ba9c-8ed6d87d5709
+        name: Wild Flower of Armagada
+        author: Harvey Rookside
+    Error:
+      required:
+      - status
+      - title
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+      example:
+        type: /bad-request
+        title: Bad Request from the client.
+        status: 400
+        detail: The server cannot or will not process the request due to an apparent client error.
+        instance: /books
+    BookPage:
+      type: array
+      items:
+        $ref: "#/components/schemas/Book"
+    BookInput:
+      required:
+      - id
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          minLength: 5
+          type: string
+        author:
+          minLength: 5
+          type: string
+      example:
+        id: 85d132be-8d1a-42bc-ba9c-8ed6d87d5709
+        name: Wild Flower of Armagada
+        author: Harvey Rookside
+  parameters:
+    PageLimit:
+      name: limit
+      in: query
+      description: Maximum number of books to return per page.
+      required: false
+      schema:
+        minimum: 1
+        type: integer
+        default: 10
+      example: 10
+    Cursor:
+      name: cursor
+      in: query
+      description: Pointer to the last item of the page.
+      required: false
+      schema:
+        type: string
+        format: uuid
+      example: fa8a0e9f-70ad-4940-9571-8ebfdcf00d20
+    Fields:
+      name: fields
+      in: query
+      description: Field(s) (or column(s)) of the table to be returned.
+      required: false
+      schema:
+        type: array
+        example:
+        - name
+        - id
+        items:
+          type: string
+    Sort:
+      name: sort
+      in: query
+      description: Field(s) for the table to be reordered to accordingly
+      required: false
+      schema:
+        type: array
+        items:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
