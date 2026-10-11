@@ -33,48 +33,48 @@ Do vấn đề thời gian và thiếu kinh nghiệm xây dựng, trong app.py n
 
 - GET /books:
   - 200:
-    [GET/books200](SwaggerUI/get_books200.png)
+    ![GET/books200](SwaggerUI/get_books200.png)
 - POST /books:
   - 201:
-    [POST/books201](SwaggerUI/post_books201.png)
+    ![POST/books201](SwaggerUI/post_books201.png)
   - 400:
-    [POST/books400](SwaggerUI/post_books400.png)
+    ![POST/books400](SwaggerUI/post_books400.png)
   - 409:
-    [POST/books409](SwaggerUI/post_books409.png)
+    ![POST/books409](SwaggerUI/post_books409.png)
   - 422:
-    [POST/books422](SwaggerUI/post_books422.png)
+    ![POST/books422](SwaggerUI/post_books422.png)
 
 - GET /books/{bookId}:
   - 200:
-    [GET/books_bookId200](SwaggerUI/get_books_bookId200.png)
+    ![GET/books_bookId200](SwaggerUI/get_books_bookId200.png)
   - 404:
-    [GET/books_bookId404](SwaggerUI/get_books_bookId404.png)
+    ![GET/books_bookId404](SwaggerUI/get_books_bookId404.png)
 
 - PUT /books/{bookId}:
   - 200:
-    [PUT/books_bookId200](SwaggerUI/put_books_bookId200.png)
+    ![PUT/books_bookId200](SwaggerUI/put_books_bookId200.png)
   - 400:
-    [PUT/books_bookId400](SwaggerUI/put_books_bookId400.png)
+    ![PUT/books_bookId400](SwaggerUI/put_books_bookId400.png)
   - 404:
-    [PUT/books_bookId404](SwaggerUI/put_books_bookId404.png)
+    ![PUT/books_bookId404](SwaggerUI/put_books_bookId404.png)
   - 422:
-    [PUT/books_bookId422](SwaggerUI/put_books_bookId422.png)
+    ![PUT/books_bookId422](SwaggerUI/put_books_bookId422.png)
 
 - PATCH /books/{bookId}:
   - 200:
-    [PATCH/books_bookId200](SwaggerUI/patch_books_bookId200.png)
+    ![PATCH/books_bookId200](SwaggerUI/patch_books_bookId200.png)
   - 400:
-    [PATCH/books_bookId400](SwaggerUI/patch_books_bookId400.png)
+    ![PATCH/books_bookId400](SwaggerUI/patch_books_bookId400.png)
   - 404:
-    [PATCH/books_bookId404](SwaggerUI/patch_books_bookId404.png)
+    ![PATCH/books_bookId404](SwaggerUI/patch_books_bookId404.png)
   - 422:
-    [PATCH/books_bookId422](SwaggerUI/patch_books_bookId422.png)
+    ![PATCH/books_bookId422](SwaggerUI/patch_books_bookId422.png)
 
 - DELETE /books/{bookId}:
   - 204:
-    [DELETE/books_bookId204](SwaggerUI/delete_books_bookId204.png)
+    ![DELETE/books_bookId204](SwaggerUI/delete_books_bookId204.png)
   - 404:
-    [DELETE/books_bookId404](SwaggerUI/delete_books_bookId404.png)
+    ![DELETE/books_bookId404](SwaggerUI/delete_books_bookId404.png)
 
 3. Hai quyết định thiết kế khó nhất.
 
