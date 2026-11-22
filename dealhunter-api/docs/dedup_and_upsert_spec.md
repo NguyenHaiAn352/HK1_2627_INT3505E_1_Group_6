@@ -32,7 +32,7 @@ Trong quá trình thu thập mã giảm giá từ nhiều nguồn, hệ thống 
 
 Nguồn dữ liệu có thể đến từ:
 
-- API đối tác;
+- API mở;
 - Tệp JSON/CSV quét định kỳ mỗi 2 giờ qua Celery Beat;
 - Admin nạp thủ công.
 

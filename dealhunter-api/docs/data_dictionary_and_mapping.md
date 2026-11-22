@@ -1,11 +1,11 @@
-# Data Dictionary & Accesstrade JSON Mapping Specification
+# Data Dictionary & Accesstrade Offers Information API Mapping Specification
 
 | Thuộc tính | Giá trị |
 |---|---|
 | Dự án | DealHunter — Smart E-commerce Voucher Aggregator |
 | Phiên bản | 1.0 |
 | Cơ sở dữ liệu | PostgreSQL 15+ / SQLAlchemy 2.x |
-| Nguồn dữ liệu | Accesstrade Datafeed / Coupons API |
+| Nguồn dữ liệu | Accesstrade Offers Information API |
 
 ## Mục lục
 
@@ -20,9 +20,11 @@
   - [3.6. user_preferences](#36-user_preferences)
   - [3.7. notifications](#37-notifications)
   - [3.8. collection_runs](#38-collection_runs)
-- [4. Quy tắc ánh xạ JSON](#4-quy-tắc-ánh-xạ-json)
-  - [4.1. Bảng ánh xạ trường](#41-bảng-ánh-xạ-trường)
-  - [4.2. Ví dụ chuyển đổi](#42-ví-dụ-chuyển-đổi)
+- [4. Quy tắc Ánh xạ dữ liệu từ Accesstrade Offers Information API](#4-quy-tắc-ánh-xạ-dữ-liệu-từ-accesstrade-offers-information-api)
+  - [4.1. Tiền xử lý payload và làm phẳng](#41-tiền-xử-lý-payload-và-làm-phẳng-flatten)
+  - [4.2. Bảng quy tắc ánh xạ trường](#42-bảng-quy-tắc-ánh-xạ-trường)
+  - [4.3. Quy tắc Regex bóc tách giá trị ưu đãi](#43-quy-tắc-regex-bóc-tách-giá-trị-ưu-đãi-từ-văn-bản-tiếng-việt)
+  - [4.4. Ví dụ ánh xạ thực tế](#44-ví-dụ-ánh-xạ-thực-tế)
 
 ---
 
@@ -122,7 +124,7 @@ Quản lý danh mục nền tảng thương mại điện tử được thu th�
 
 ### 3.4. `vouchers`
 
-Kho dữ liệu mã giảm giá trung tâm sau khi chuẩn hóa từ các nguồn thu thập hoặc Admin nhập thủ công.
+Kho dữ liệu mã giảm giá trung tâm. Tài liệu này mô tả dữ liệu voucher được thu thập tự động và chuẩn hóa từ **Accesstrade Offers Information API** theo chu kỳ định kỳ.
 
 | Cột | Kiểu PostgreSQL | SQLAlchemy | Null | Mặc định | Ràng buộc / chỉ mục | Mô tả |
 |---|---|---|---:|---|---|---|
@@ -214,67 +216,154 @@ Ghi nhận lịch sử thực thi tác vụ thu thập dữ liệu qua Celery Be
 
 ---
 
-## 4. Quy tắc ánh xạ JSON
+## 4. Quy tắc Ánh xạ Dữ liệu từ Accesstrade Offers Information API
 
-`AccesstradeCollector` hoặc `FileCollector` nhận payload JSON từ Datafeed/Coupons API, sau đó `VoucherNormalizer` chuẩn hóa dữ liệu trước khi chạy thuật toán chống trùng.
+Hệ thống đồng bộ dữ liệu tự động qua `AccesstradeAPICollector` bằng endpoint:
 
-### 4.1. Bảng ánh xạ trường
+```http
+GET https://api.accesstrade.vn/v1/offers_informations
+```
 
-| Trường nguồn | Kiểu nguồn | Cột đích | Kiểu đích | Quy tắc chuẩn hóa | Ngoại lệ / mặc định |
-|---|---|---|---|---|---|
-| `merchant`, `campaign_slug`, `domain` | `string` | `vouchers.platform_id` qua `platforms.slug` | `UUID` | Chuyển chữ thường và ánh xạ tên sàn: `shopee_vn`, `shopee.vn`, `Shopee` → `slug = shopee`. Sau đó truy vấn `platforms.id`. | Không khớp hoặc nền tảng không active: bỏ bản ghi và ghi warning. |
-| `id`, `coupon_id` | `string` / `int` | `vouchers.source_external_id` | `VARCHAR(255)` | `str(value).strip()`; giữ nguyên phân biệt hoa/thường của ID nguồn. | `NULL`, chuỗi rỗng hoặc thiếu trường → `NULL`; dùng cấp 2/cấp 3 để tính `dedup_key`. |
-| `coupon_code`, `code` | `string` | `vouchers.code`, `vouchers.normalized_code` | `VARCHAR(100)` | `code = val.strip()`; `normalized_code = re.sub(r'\s+', '', val.strip()).upper()`. | `NULL`, rỗng hoặc giá trị giả `NO_CODE`, `NONE` → cả hai trường đều `NULL`. |
-| `name`, `title` | `string` | `vouchers.title` | `VARCHAR(255)` | Loại bỏ HTML, chuẩn hóa khoảng trắng thành một dấu cách, Unicode NFC và giới hạn 255 ký tự. | Thiếu/rỗng → reject và tăng biến đếm lỗi. |
-| `content`, `desc`, `description` | `string` | `vouchers.description` | `TEXT` | Làm sạch thẻ HTML và giữ nội dung điều kiện chi tiết. | Thiếu/rỗng → `NULL`. |
-| `discount_type`, `discount_value`, `discount_percentage` | `string` / `number` | `vouchers.discount_type`, `vouchers.discount_value` | `VARCHAR(20)`, `NUMERIC(12,2)` | Nếu `discount_percentage > 0` hoặc `type = percentage` → `PERCENTAGE`; nếu freeship → `FREE_SHIPPING`; trường hợp còn lại → `FIXED_AMOUNT`. | Loại bỏ `đ`, `VND`, dấu `,` rồi ép sang `Decimal`; giá trị âm hoặc phần trăm > 100 → reject. |
-| `min_spend`, `min_order_value` | `number` / `string` | `vouchers.min_order_value` | `NUMERIC(12,2)` | Loại bỏ ký tự phân cách hàng nghìn, ép sang `Decimal`, làm tròn 2 chữ số. | Thiếu/rỗng → `0.00`; giá trị âm → reject. |
-| `max_discount`, `max_value` | `number` / `string` | `vouchers.max_discount` | `NUMERIC(12,2)` | Ép sang `Decimal`, làm tròn 2 chữ số. | `NULL`, rỗng, thiếu hoặc `<= 0` → `NULL`. |
-| `start_time`, `start_date` | `string` / Unix timestamp | `vouchers.start_date` | `TIMESTAMPTZ` | Parse ISO 8601, `YYYY-MM-DD HH:MM:SS` hoặc Unix epoch; mặc định múi giờ nguồn `+07:00` khi thiếu offset, sau đó chuyển UTC. | Thiếu/rỗng hoặc sai định dạng → `NULL` và ghi cảnh báo. |
-| `end_time`, `expired_date`, `end_date` | `string` / Unix timestamp | `vouchers.expiry_date` | `TIMESTAMPTZ` | Parse tương tự `start_date`; nếu chỉ có `YYYY-MM-DD`, gán `23:59:59+07:00` rồi chuyển UTC. | Thiếu/rỗng → `NULL`; đã hết hạn → đánh dấu `EXPIRED` hoặc không nạp mới. |
-| `aff_link`, `link`, `url` | `string` | `vouchers.source_url` | `TEXT` | `val.strip()`; chỉ nhận URL có scheme `http://` hoặc `https://`. | Thiếu/rỗng hoặc không hợp lệ → `NULL`. |
-| *Tính toán hệ thống* | — | `vouchers.dedup_key` | `VARCHAR(128)` | Sinh theo ba cấp độ: `ext:`, `code:` hoặc `fp:` sau khi đã chuẩn hóa các trường nguồn. | Bắt buộc khác `NULL`. |
-| *Tính toán hệ thống* | — | `vouchers.status` | `VARCHAR(20)` | Nếu `expiry_date <= NOW(UTC)` → `EXPIRED`; ngược lại → `ACTIVE`. | Mặc định `ACTIVE`. |
+Các tham số phân trang gồm `page` và `limit`. Mọi request phải gửi header:
 
-### 4.2. Ví dụ chuyển đổi
+```http
+Authorization: Token <ACCESS_KEY>
+```
 
-#### Payload đầu vào
+Sau khi nhận phản hồi, `VoucherNormalizer` chuẩn hóa dữ liệu trước khi chạy thuật toán chống trùng.
+
+### 4.1. Tiền xử lý Payload và Làm phẳng (Flatten)
+
+1. **Đọc danh sách offer**
+   - Lấy mảng `response["data"]`.
+   - Tiếp tục đọc tới khi `data` rỗng hoặc đạt giới hạn trang đã cấu hình.
+
+2. **Tách mảng `coupons[]`**
+   - Nếu `coupons` rỗng (`[]`): tạo một bản ghi deal giảm giá trực tiếp.
+     - `code = NULL`
+     - Dùng `dedup_key` cấp 1 `ext:<id>`
+   - Nếu `coupons` có $N$ phần tử (`N >= 1`): tách thành $N$ bản ghi voucher độc lập.
+     - Kế thừa `id`, `merchant`, `domain`, `name`, `content`, `start_time`, `end_time`, `aff_link` và `link` của offer.
+     - Gán `coupon_code` tương ứng cho từng bản ghi.
+
+### 4.2. Bảng quy tắc ánh xạ trường
+
+| Trường nguồn (Accesstrade API) | Kiểu nguồn | Cột đích (`vouchers`) | Quy tắc biến đổi và chuẩn hóa | Ngoại lệ / mặc định |
+|---|---|---|---|---|
+| `merchant`, `domain` | `string` | `platform_id` qua `platforms.slug` | Chuẩn hóa về chữ thường và ánh xạ qua từ điển sàn: `tikivn` hoặc `tiki.vn` → `tiki`; `shopeevn` hoặc `shopee.vn` → `shopee`; `lazadavn` hoặc `lazada.vn` → `lazada`. Sau đó lấy `platforms.id`. | Không khớp sàn trong `platforms` hoặc sàn đang `INACTIVE` → bỏ bản ghi. |
+| `id` kết hợp `coupon_code` | `string` | `source_external_id` | Offer có tối đa một mã: `str(id).strip()`; ví dụ `tiki-79650804`. Offer tách nhiều mã: ghép `f"{id}_{normalized_code}"` để phân biệt từng mã trong cùng offer. | `id` rỗng hoặc thiếu → `NULL`; chuyển sang cấp 2 hoặc cấp 3 khi tính `dedup_key`. |
+| `coupons[].coupon_code` | `string` | `code`, `normalized_code` | `code = val.strip()` giữ nguyên định dạng hiển thị. `normalized_code = re.sub(r'\s+', '', val.strip()).upper()`; ví dụ `399K35K`. | `coupons` rỗng hoặc `coupon_code` rỗng → cả hai trường đều `NULL`. |
+| `name` | `string` | `title` | Làm sạch thẻ HTML, chuẩn hóa Unicode NFC, gộp khoảng trắng thừa và cắt tối đa 255 ký tự. | Thiếu hoặc rỗng → loại bỏ bản ghi. |
+| `coupons[].coupon_desc`, `content` | `string` | `description` | Ghép `coupon_desc` nếu có với `content`, chuẩn hóa xuống dòng `\n` và loại bỏ thẻ HTML. | Cả hai đều rỗng → `NULL`. |
+| *Trích xuất bằng Regex* | `string` | `discount_type`, `discount_value`, `min_order_value`, `max_discount` | Áp dụng bộ quy tắc bóc tách ưu đãi trong [Mục 4.3](#43-quy-tắc-regex-bóc-tách-giá-trị-ưu-đãi-từ-văn-bản-tiếng-việt). | Không trích xuất được giá trị giảm hợp lệ → `FIXED_AMOUNT`, `discount_value = 0.00`; ưu tiên `FREE_SHIPPING` nếu có từ khóa freeship. |
+| `start_time` | `string` | `start_date` | Nếu là `YYYY-MM-DD`, gán `00:00:00+07:00`, sau đó quy đổi về UTC (`TIMESTAMPTZ`). | `NULL` hoặc sai định dạng → `NULL`. |
+| `end_time` | `string` | `expiry_date` | Nếu là `YYYY-MM-DD`, gán `23:59:59+07:00`, sau đó quy đổi về UTC. | `NULL` → `NULL`; nhỏ hơn hoặc bằng `NOW(UTC)` → `EXPIRED`. |
+| `aff_link`, `link` | `string` | `source_url` | Ưu tiên `aff_link`, dự phòng `link` nếu `aff_link` rỗng; kiểm tra scheme `http://` hoặc `https://`. | Không hợp lệ hoặc rỗng → `NULL`. |
+| *Tính toán nội bộ* | — | `dedup_key` | Sinh theo thuật toán chống trùng 3 cấp độ: `ext:`, `code:` hoặc `fp:`. | Bắt buộc `NOT NULL`. |
+| *Tính toán nội bộ* | — | `status` | Nếu `expiry_date <= NOW(UTC)` thì `EXPIRED`; ngược lại `ACTIVE`. | Mặc định `ACTIVE`. |
+
+### 4.3. Quy tắc Regex bóc tách giá trị ưu đãi từ văn bản tiếng Việt
+
+Thứ tự ưu tiên nguồn văn bản:
+
+1. `coupon_desc`
+2. `name`
+3. `content`
+
+#### 4.3.1. Quy đổi đơn vị tiền tệ
+
+Hàm `parse_vnd_amount` xử lý các dạng sau:
+
+- Hậu tố `k` hoặc `K`: nhân với `1,000`.
+  - `35K` → `35000.00`
+  - `399k` → `399000.00`
+  - `1.5K` → `1500.00`
+- Hậu tố `tr` hoặc `triệu`: nhân với `1,000,000`.
+  - `1tr` → `1000000.00`
+  - `1.5 triệu` → `1500000.00`
+- Dấu chấm/phẩy phân cách nghìn hoặc hậu tố `đ`/`vnđ`: loại bỏ dấu phân cách.
+  - `35.000đ` → `35000.00`
+  - `100,000 VND` → `100000.00`
+
+#### 4.3.2. Xác định loại và giá trị giảm
+
+| Ưu tiên | Loại | Regex / điều kiện | Kết quả |
+|---:|---|---|---|
+| 1 | `PERCENTAGE` | `giảm\s*(\d+(?:[.,]\d+)?)\s*%` | `discount_value = Decimal(số phần trăm)` |
+| 2 | `FIXED_AMOUNT` | `(?:giảm|hoàn)\s*(\d+(?:[.,]\d+)?\s*(?:k|tr|triệu|đ|vnđ)?)` | `discount_value = parse_vnd_amount(...)` |
+| 3 | `FREE_SHIPPING` | `freeship\|miễn phí vận chuyển\|free ship` | `discount_value =` số tiền giảm phí ship nếu có, ngược lại `0.00` |
+
+#### 4.3.3. Xác định ngưỡng đơn tối thiểu
+
+Khớp mẫu:
+
+```regex
+(?:đơn(?:\s*hàng)?\s*từ|từ|cho\s*đơn)\s*(\d+(?:[.,]\d+)?\s*(?:k|tr|triệu|đ|vnđ)?)
+```
+
+Sau đó gọi `parse_vnd_amount(...)`. Nếu không khớp: `0.00`.
+
+#### 4.3.4. Xác định mức giảm tối đa
+
+Khớp mẫu:
+
+```regex
+tối\s*đa\s*(\d+(?:[.,]\d+)?\s*(?:k|tr|triệu|đ|vnđ)?)
+```
+
+Sau đó gọi `parse_vnd_amount(...)`. Nếu không khớp: `NULL`.
+
+### 4.4. Ví dụ ánh xạ thực tế
+
+#### Payload thô
 
 ```json
 {
-  "id": "AT_9981273",
-  "merchant": "shopee",
-  "coupon_code": "  sale50k_nov ",
-  "name": "Giảm 50.000đ cho đơn hàng thời trang từ 200K",
-  "content": "<p>Áp dụng cho toàn bộ sản phẩm thuộc ngành hàng Thời trang Nam/Nữ.</p>",
-  "discount_type": "fixed",
-  "discount_value": 50000,
-  "min_spend": 200000,
-  "max_discount": null,
-  "start_time": "2026-11-20 00:00:00",
-  "end_time": "2026-11-30 23:59:59",
-  "aff_link": "https://go.isclix.com/deep_link/abc123?url=https%3A%2F%2Fshopee.vn"
+  "aff_link": "https://go.isclix.com/deep_link/7119084086432360978?url=https%3A%2F%2Ftiki.vn%2Fcua-hang%2Fmiley-lingerie%3Fref%3Dsansandeals",
+  "banners": [],
+  "categories": [
+    {
+      "category_name": "EC-29",
+      "category_name_show": "Other",
+      "category_no": ""
+    }
+  ],
+  "content": "Giảm 35K cho đơn hàng từ 399K.\nÁp dụng cho sản phẩm của Miley Lingerie.",
+  "coupons": [
+    {
+      "coupon_code": "399K35K",
+      "coupon_desc": "Giảm 35K cho đơn hàng từ 399K"
+    }
+  ],
+  "domain": "tiki.vn",
+  "end_time": "2026-12-31",
+  "id": "tiki-79650804",
+  "image": "https://vcdn.tikicdn.com/cache/128x128/ts/seller/a1/9f/71/f18437acdbee936de4307140d548152b.jpg",
+  "link": "https://tiki.vn/cua-hang/miley-lingerie?ref=sansandeals",
+  "merchant": "tikivn",
+  "name": "[Miley Lingerie]-Giảm 35K cho đơn hàng từ 399K",
+  "start_time": "2026-11-22"
 }
 ```
 
-#### Bản ghi sau chuẩn hóa
+#### Bản ghi chuẩn hóa
 
 ```json
 {
-  "platform_id": "550e8400-e29b-41d4-a716-446655440001",
-  "dedup_key": "ext:AT_9981273",
-  "source_external_id": "AT_9981273",
-  "code": "sale50k_nov",
-  "normalized_code": "SALE50KNOV",
-  "title": "Giảm 50.000đ cho đơn hàng thời trang từ 200K",
-  "description": "Áp dụng cho toàn bộ sản phẩm thuộc ngành hàng Thời trang Nam/Nữ.",
+  "platform_id": "550e8400-e29b-41d4-a716-446655440003",
+  "dedup_key": "ext:tiki-79650804",
+  "source_external_id": "tiki-79650804",
+  "code": "399K35K",
+  "normalized_code": "399K35K",
+  "title": "[Miley Lingerie]-Giảm 35K cho đơn hàng từ 399K",
+  "description": "Giảm 35K cho đơn hàng từ 399K\nÁp dụng cho sản phẩm của Miley Lingerie.",
   "discount_type": "FIXED_AMOUNT",
-  "discount_value": "50000.00",
-  "min_order_value": "200000.00",
+  "discount_value": "35000.00",
+  "min_order_value": "399000.00",
   "max_discount": null,
-  "start_date": "2026-11-19T17:00:00Z",
-  "expiry_date": "2026-11-30T16:59:59Z",
-  "source_url": "https://go.isclix.com/deep_link/abc123?url=https%3A%2F%2Fshopee.vn",
+  "start_date": "2026-11-21T17:00:00Z",
+  "expiry_date": "2026-12-31T16:59:59Z",
+  "source_url": "https://go.isclix.com/deep_link/7119084086432360978?url=https%3A%2F%2Ftiki.vn%2Fcua-hang%2Fmiley-lingerie%3Fref%3Dsansandeals",
   "status": "ACTIVE"
 }
 ```
