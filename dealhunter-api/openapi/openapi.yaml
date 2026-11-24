@@ -8,6 +8,8 @@ info:
 servers:
 - url: /api/v1
 tags:
+- name: Auth
+  description: Xác thực và quản lý phiên đăng nhập.
 - name: Platforms
   description: Danh mục sàn thương mại điện tử.
 - name: Vouchers
@@ -22,6 +24,62 @@ tags:
   description: Lịch sử và kích hoạt phiên đồng bộ từ AccessTrade.
 
 paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Đăng nhập bằng email và mật khẩu
+      description: Endpoint công khai; không yêu cầu access token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 1
+                  writeOnly: true
+      responses:
+        '200':
+          description: Đăng nhập thành công; cấp access token và refresh token.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, refresh_token, token_type]
+                properties:
+                  access_token:
+                    type: string
+                    description: JWT dùng trong header Authorization của các request cần xác thực.
+                  refresh_token:
+                    type: string
+                    description: Token dùng để làm mới phiên đăng nhập.
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                    format: int32
+                    description: Thời hạn access token tính bằng giây.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Email hoặc mật khẩu không hợp lệ.
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /platforms:
     get:
       tags: [Platforms]
@@ -209,6 +267,8 @@ paths:
     get:
       tags: [Preferences]
       operationId: listPreferences
+      security:
+      - BearerAuth: []
       summary: Lấy các bộ tiêu chí săn mã của người dùng
       parameters:
       - $ref: '#/components/parameters/UserIdQuery'
@@ -241,6 +301,8 @@ paths:
     post:
       tags: [Preferences]
       operationId: createPreference
+      security:
+      - BearerAuth: []
       summary: Tạo bộ tiêu chí săn mã
       requestBody:
         required: true
@@ -294,6 +356,8 @@ paths:
     get:
       tags: [Preferences]
       operationId: getPreference
+      security:
+      - BearerAuth: []
       summary: Xem chi tiết tiêu chí săn mã
       parameters:
       - $ref: '#/components/parameters/PreferenceId'
@@ -322,6 +386,8 @@ paths:
     patch:
       tags: [Preferences]
       operationId: updatePreference
+      security:
+      - BearerAuth: []
       summary: Cập nhật hoặc bật/tắt tiêu chí săn mã
       parameters:
       - $ref: '#/components/parameters/PreferenceId'
@@ -363,6 +429,8 @@ paths:
     delete:
       tags: [Preferences]
       operationId: deletePreference
+      security:
+      - BearerAuth: []
       summary: Xóa tiêu chí săn mã
       parameters:
       - $ref: '#/components/parameters/PreferenceId'
@@ -378,6 +446,8 @@ paths:
     get:
       tags: [SavedVouchers]
       operationId: listSavedVouchers
+      security:
+      - BearerAuth: []
       summary: Lấy danh sách voucher đã lưu
       parameters:
       - $ref: '#/components/parameters/UserIdQuery'
@@ -400,6 +470,8 @@ paths:
     post:
       tags: [SavedVouchers]
       operationId: saveVoucher
+      security:
+      - BearerAuth: []
       summary: Lưu một voucher
       description: Một người dùng không được lưu trùng voucher (UNIQUE user_id, voucher_id).
       requestBody:
@@ -444,6 +516,8 @@ paths:
     delete:
       tags: [SavedVouchers]
       operationId: unsaveVoucher
+      security:
+      - BearerAuth: []
       summary: Bỏ lưu voucher
       parameters:
       - $ref: '#/components/parameters/SavedVoucherId'
@@ -459,6 +533,8 @@ paths:
     get:
       tags: [Notifications]
       operationId: listNotifications
+      security:
+      - BearerAuth: []
       summary: Lấy thông báo của người dùng
       description: |
         Thông báo phát sinh tự động khi deal mới khớp tiêu chí hoặc deal cũ
@@ -498,6 +574,8 @@ paths:
     patch:
       tags: [Notifications]
       operationId: setNotificationReadStatus
+      security:
+      - BearerAuth: []
       summary: Đánh dấu thông báo đã đọc hoặc chưa đọc
       parameters:
       - $ref: '#/components/parameters/NotificationId'
@@ -664,6 +742,12 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token gửi qua header `Authorization: Bearer <access_token>`.
   parameters:
     PlatformId:
       name: platform_id
@@ -705,7 +789,7 @@ components:
       name: user_id
       in: query
       required: true
-      description: ID người dùng, truyền trực tiếp do không mô tả lớp xác thực.
+      description: ID người dùng phải khớp với tài khoản đã xác thực.
       schema: {type: string, format: uuid}
       example: 550e8400-e29b-41d4-a716-446655440000
 
