@@ -1,0 +1,1009 @@
+openapi: 3.0.3
+info:
+  title: DealHunter API
+  version: 2.0.0
+  description: |
+    REST API cho hệ thống DealHunter, dựa trên tài liệu
+    "DealHunter - Technical Architecture Specification v2.0".
+servers:
+- url: /api/v1
+tags:
+- name: Platforms
+  description: Danh mục sàn thương mại điện tử.
+- name: Vouchers
+  description: Tìm kiếm và xem voucher đã đồng bộ.
+- name: Preferences
+  description: Bộ tiêu chí săn voucher cá nhân hóa.
+- name: SavedVouchers
+  description: Voucher đã lưu của người dùng.
+- name: Notifications
+  description: Thông báo trong ứng dụng về deal mới hoặc được nâng cấp.
+- name: CollectionRuns
+  description: Lịch sử và kích hoạt phiên đồng bộ từ AccessTrade.
+
+paths:
+  /platforms:
+    get:
+      tags: [Platforms]
+      operationId: listPlatforms
+      summary: Liệt kê các sàn thương mại điện tử
+      parameters:
+      - name: status
+        in: query
+        schema: {type: string, maxLength: 20}
+        description: Lọc theo trạng thái (ví dụ ACTIVE).
+        example: ACTIVE
+      responses:
+        '200':
+          description: Danh sách sàn.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Platform'}
+              example:
+              - id: 550e8400-e29b-41d4-a716-446655440001
+                external_merchant_id:
+                name: Shopee
+                slug: shopee
+                logo_url: https://example.com/shopee.png
+                base_url: https://shopee.vn
+                status: ACTIVE
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T09:00:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /platforms/{platform_id}:
+    get:
+      tags: [Platforms]
+      operationId: getPlatform
+      summary: Xem chi tiết sàn
+      parameters:
+      - $ref: '#/components/parameters/PlatformId'
+      responses:
+        '200':
+          description: Thông tin sàn.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Platform'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440001
+                external_merchant_id:
+                name: Shopee
+                slug: shopee
+                logo_url: https://example.com/shopee.png
+                base_url: https://shopee.vn
+                status: ACTIVE
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T09:00:00+07:00'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /vouchers:
+    get:
+      tags: [Vouchers]
+      operationId: listVouchers
+      summary: Tìm kiếm và lọc voucher
+      description: |
+        Hỗ trợ tìm theo tên/mã, sàn, loại giảm giá và trạng thái.
+        Database tối ưu bằng các chỉ mục (status, platform_id, expiry_date)
+        và (normalized_code).
+      parameters:
+      - name: platform_id
+        in: query
+        schema: {type: string, format: uuid}
+        example: 550e8400-e29b-41d4-a716-446655440001
+      - name: status
+        in: query
+        schema: {type: string, maxLength: 20}
+        example: ACTIVE
+      - name: discount_type
+        in: query
+        schema: {type: string, maxLength: 30}
+        example: FIXED
+      - name: keyword
+        in: query
+        description: Từ khóa trong title hoặc mã voucher.
+        schema: {type: string}
+        example: điện thoại
+      - name: expiry_from
+        in: query
+        description: Chỉ lấy voucher hết hạn không trước thời điểm này.
+        schema: {type: string, format: date-time}
+        example: '2026-11-23T00:00:00+07:00'
+      - name: limit
+        in: query
+        schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+        example: 20
+      - name: offset
+        in: query
+        schema: {type: integer, minimum: 0, default: 0}
+        example: 0
+      responses:
+        '200':
+          description: Danh sách voucher phù hợp.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Voucher'}
+              example:
+              - id: 550e8400-e29b-41d4-a716-446655440002
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                dedup_key: shopee-SALE50
+                source_external_id:
+                campaign_id:
+                code: SALE50
+                normalized_code: SALE50
+                title: Giảm 50.000đ cho đơn từ 200.000đ
+                description: Ưu đãi áp dụng trong thời gian chương trình.
+                category_name:
+                discount_type: FIXED
+                discount_value: 50000.0
+                min_order_value: 200000.0
+                max_discount: 50000.0
+                percentage_used:
+                start_date: '2026-11-20T00:00:00+07:00'
+                expiry_date: '2026-12-31T23:59:59+07:00'
+                source_url: https://example.com/deals/SALE50
+                image_url:
+                status: ACTIVE
+                discount_version: 1
+                last_verified_at: '2026-11-23T09:00:00+07:00'
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T09:00:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /vouchers/{voucher_id}:
+    get:
+      tags: [Vouchers]
+      operationId: getVoucher
+      summary: Xem chi tiết voucher
+      parameters:
+      - $ref: '#/components/parameters/VoucherId'
+      responses:
+        '200':
+          description: Chi tiết voucher.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Voucher'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440002
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                dedup_key: shopee-SALE50
+                source_external_id:
+                campaign_id:
+                code: SALE50
+                normalized_code: SALE50
+                title: Giảm 50.000đ cho đơn từ 200.000đ
+                description: Ưu đãi áp dụng trong thời gian chương trình.
+                category_name:
+                discount_type: FIXED
+                discount_value: 50000.0
+                min_order_value: 200000.0
+                max_discount: 50000.0
+                percentage_used:
+                start_date: '2026-11-20T00:00:00+07:00'
+                expiry_date: '2026-12-31T23:59:59+07:00'
+                source_url: https://example.com/deals/SALE50
+                image_url:
+                status: ACTIVE
+                discount_version: 1
+                last_verified_at: '2026-11-23T09:00:00+07:00'
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T09:00:00+07:00'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /preferences:
+    get:
+      tags: [Preferences]
+      operationId: listPreferences
+      summary: Lấy các bộ tiêu chí săn mã của người dùng
+      parameters:
+      - $ref: '#/components/parameters/UserIdQuery'
+      - name: is_active
+        in: query
+        schema: {type: boolean}
+        example: true
+      responses:
+        '200':
+          description: Danh sách tiêu chí.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/UserPreference'}
+              example:
+              - id: 550e8400-e29b-41d4-a716-446655440003
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                keyword: điện thoại
+                discount_type: FIXED
+                min_discount: 30000.0
+                max_min_order_value: 300000.0
+                is_active: true
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T09:00:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Preferences]
+      operationId: createPreference
+      summary: Tạo bộ tiêu chí săn mã
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PreferenceCreate'}
+            example:
+              user_id: 550e8400-e29b-41d4-a716-446655440000
+              platform_id: 550e8400-e29b-41d4-a716-446655440001
+              keyword: điện thoại
+              discount_type: FIXED
+              min_discount: 30000.0
+              max_min_order_value: 300000.0
+              is_active: true
+        description: 'Gửi Content-Type: application/json. JSON sai cú pháp trả 400; kiểu dữ liệu/giá trị vi phạm
+          quy tắc nghiệp vụ trả 422 nếu endpoint có khai báo.'
+      responses:
+        '201':
+          description: 201 Created. Tài nguyên mới đã được tạo.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserPreference'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440003
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                keyword: điện thoại
+                discount_type: FIXED
+                min_discount: 30000.0
+                max_min_order_value: 300000.0
+                is_active: true
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T09:00:00+07:00'
+          headers:
+            Location:
+              description: URI của tài nguyên vừa tạo.
+              schema:
+                type: string
+                format: uri-reference
+              example: /api/v1/preferences/550e8400-e29b-41d4-a716-446655440003
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /preferences/{preference_id}:
+    get:
+      tags: [Preferences]
+      operationId: getPreference
+      summary: Xem chi tiết tiêu chí săn mã
+      parameters:
+      - $ref: '#/components/parameters/PreferenceId'
+      responses:
+        '200':
+          description: Thông tin tiêu chí.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserPreference'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440003
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                keyword: điện thoại
+                discount_type: FIXED
+                min_discount: 30000.0
+                max_min_order_value: 300000.0
+                is_active: true
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T09:00:00+07:00'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags: [Preferences]
+      operationId: updatePreference
+      summary: Cập nhật hoặc bật/tắt tiêu chí săn mã
+      parameters:
+      - $ref: '#/components/parameters/PreferenceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PreferenceUpdate'}
+            example:
+              min_discount: 50000.0
+              is_active: true
+        description: 'Gửi Content-Type: application/json. JSON sai cú pháp trả 400; kiểu dữ liệu/giá trị vi phạm
+          quy tắc nghiệp vụ trả 422 nếu endpoint có khai báo.'
+      responses:
+        '200':
+          description: Tiêu chí sau khi cập nhật.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserPreference'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440003
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                keyword: điện thoại
+                discount_type: FIXED
+                min_discount: 50000.0
+                max_min_order_value: 300000.0
+                is_active: true
+                created_at: '2026-11-23T09:00:00+07:00'
+                updated_at: '2026-11-23T10:00:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Preferences]
+      operationId: deletePreference
+      summary: Xóa tiêu chí săn mã
+      parameters:
+      - $ref: '#/components/parameters/PreferenceId'
+      responses:
+        '204': {description: Đã xóa; không có response body.}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /saved-vouchers:
+    get:
+      tags: [SavedVouchers]
+      operationId: listSavedVouchers
+      summary: Lấy danh sách voucher đã lưu
+      parameters:
+      - $ref: '#/components/parameters/UserIdQuery'
+      responses:
+        '200':
+          description: Danh sách voucher đã lưu.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/SavedVoucher'}
+              example:
+              - id: 550e8400-e29b-41d4-a716-446655440004
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                voucher_id: 550e8400-e29b-41d4-a716-446655440002
+                created_at: '2026-11-23T09:00:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [SavedVouchers]
+      operationId: saveVoucher
+      summary: Lưu một voucher
+      description: Một người dùng không được lưu trùng voucher (UNIQUE user_id, voucher_id).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SavedVoucherCreate'}
+            example:
+              user_id: 550e8400-e29b-41d4-a716-446655440000
+              voucher_id: 550e8400-e29b-41d4-a716-446655440002
+        description: 'Gửi Content-Type: application/json. JSON sai cú pháp trả 400; kiểu dữ liệu/giá trị vi phạm
+          quy tắc nghiệp vụ trả 422 nếu endpoint có khai báo.'
+      responses:
+        '201':
+          description: 201 Created. Tài nguyên mới đã được tạo.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SavedVoucher'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440004
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                voucher_id: 550e8400-e29b-41d4-a716-446655440002
+                created_at: '2026-11-23T09:00:00+07:00'
+          headers:
+            Location:
+              description: URI của tài nguyên vừa tạo.
+              schema:
+                type: string
+                format: uri-reference
+              example: /api/v1/saved-vouchers/550e8400-e29b-41d4-a716-446655440004
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /saved-vouchers/{saved_voucher_id}:
+    delete:
+      tags: [SavedVouchers]
+      operationId: unsaveVoucher
+      summary: Bỏ lưu voucher
+      parameters:
+      - $ref: '#/components/parameters/SavedVoucherId'
+      responses:
+        '204': {description: Đã bỏ lưu; không có response body.}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: Lấy thông báo của người dùng
+      description: |
+        Thông báo phát sinh tự động khi deal mới khớp tiêu chí hoặc deal cũ
+        tăng giá trị giảm. Ràng buộc UNIQUE(user_id, voucher_id, event_key)
+        chống thông báo trùng khi worker retry.
+      parameters:
+      - $ref: '#/components/parameters/UserIdQuery'
+      - name: is_read
+        in: query
+        schema: {type: boolean}
+        example: false
+      responses:
+        '200':
+          description: Danh sách thông báo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Notification'}
+              example:
+              - id: 550e8400-e29b-41d4-a716-446655440005
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                voucher_id: 550e8400-e29b-41d4-a716-446655440002
+                notification_type: DEAL_IMPROVED
+                event_key: DEAL_IMPROVED:1
+                old_discount_value: 30000.0
+                new_discount_value: 50000.0
+                title: Ưu đãi vừa tăng
+                message: Voucher SALE50 đã tăng mức giảm lên 50.000đ.
+                is_read: false
+                created_at: '2026-11-23T09:00:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /notifications/{notification_id}:
+    patch:
+      tags: [Notifications]
+      operationId: setNotificationReadStatus
+      summary: Đánh dấu thông báo đã đọc hoặc chưa đọc
+      parameters:
+      - $ref: '#/components/parameters/NotificationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_read]
+              additionalProperties: false
+              properties:
+                is_read: {type: boolean}
+            example:
+              is_read: true
+        description: 'Gửi Content-Type: application/json. JSON sai cú pháp trả 400; kiểu dữ liệu/giá trị vi phạm
+          quy tắc nghiệp vụ trả 422 nếu endpoint có khai báo.'
+      responses:
+        '200':
+          description: Thông báo sau khi cập nhật.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Notification'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440005
+                user_id: 550e8400-e29b-41d4-a716-446655440000
+                voucher_id: 550e8400-e29b-41d4-a716-446655440002
+                notification_type: DEAL_IMPROVED
+                event_key: DEAL_IMPROVED:1
+                old_discount_value: 30000.0
+                new_discount_value: 50000.0
+                title: Ưu đãi vừa tăng
+                message: Voucher SALE50 đã tăng mức giảm lên 50.000đ.
+                is_read: true
+                created_at: '2026-11-23T09:00:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /collection-runs:
+    get:
+      tags: [CollectionRuns]
+      operationId: listCollectionRuns
+      summary: Xem nhật ký các phiên đồng bộ
+      parameters:
+      - name: platform_id
+        in: query
+        schema: {type: string, format: uuid}
+        example: 550e8400-e29b-41d4-a716-446655440001
+      - name: status
+        in: query
+        schema: {type: string, maxLength: 20}
+        example: ACTIVE
+      responses:
+        '200':
+          description: Danh sách các lần đồng bộ.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/CollectionRun'}
+              example:
+              - id: 550e8400-e29b-41d4-a716-446655440006
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                source_type: ACCESSTRADE
+                triggered_by: MANUAL
+                status: COMPLETED
+                total_fetched: 150
+                inserted_count: 20
+                updated_count: 40
+                error_message:
+                started_at: '2026-11-23T09:00:00+07:00'
+                finished_at: '2026-11-23T09:05:00+07:00'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [CollectionRuns]
+      operationId: triggerCollectionRun
+      summary: Kích hoạt đồng bộ thủ công qua Celery
+      description: |
+        Tạo một phiên đồng bộ và đưa job vào Redis/Celery.
+        platform_id bằng null hoặc bỏ trống nghĩa là đồng bộ tất cả sàn.
+        Công việc được thực hiện bất đồng bộ; 202 không có nghĩa đã hoàn tất.
+        Nếu Redis/Celery tạm thời không thể nhận yêu cầu, trả 503 thay vì 202.
+        Nếu platform_id tham chiếu sàn không tồn tại, trả 404.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CollectionRunCreate'}
+            example:
+              platform_id: 550e8400-e29b-41d4-a716-446655440001
+        description: 'Gửi Content-Type: application/json. JSON sai cú pháp trả 400; kiểu dữ liệu/giá trị vi phạm
+          quy tắc nghiệp vụ trả 422 nếu endpoint có khai báo.'
+      responses:
+        '202':
+          description: 202 Accepted. Tác vụ đã được tiếp nhận; chưa đảm bảo đã hoàn tất.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CollectionRun'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440006
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                source_type: ACCESSTRADE
+                triggered_by: MANUAL
+                status: QUEUED
+                total_fetched: 0
+                inserted_count: 0
+                updated_count: 0
+                error_message:
+                started_at: '2026-11-23T09:00:00+07:00'
+                finished_at:
+          headers:
+            Location:
+              description: URI kiểm tra trạng thái tác vụ, ví dụ /api/v1/collection-runs/{run_id}.
+              schema:
+                type: string
+                format: uri-reference
+              example: /api/v1/collection-runs/550e8400-e29b-41d4-a716-446655440006
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /collection-runs/{run_id}:
+    get:
+      tags: [CollectionRuns]
+      operationId: getCollectionRun
+      summary: Xem trạng thái và số liệu phiên đồng bộ
+      parameters:
+      - $ref: '#/components/parameters/RunId'
+      responses:
+        '200':
+          description: Chi tiết phiên đồng bộ.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CollectionRun'}
+              example:
+                id: 550e8400-e29b-41d4-a716-446655440006
+                platform_id: 550e8400-e29b-41d4-a716-446655440001
+                source_type: ACCESSTRADE
+                triggered_by: MANUAL
+                status: COMPLETED
+                total_fetched: 150
+                inserted_count: 20
+                updated_count: 40
+                error_message:
+                started_at: '2026-11-23T09:00:00+07:00'
+                finished_at: '2026-11-23T09:05:00+07:00'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    PlatformId:
+      name: platform_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+      example: 550e8400-e29b-41d4-a716-446655440001
+    VoucherId:
+      name: voucher_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+      example: 550e8400-e29b-41d4-a716-446655440002
+    PreferenceId:
+      name: preference_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+      example: 550e8400-e29b-41d4-a716-446655440003
+    SavedVoucherId:
+      name: saved_voucher_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+      example: 550e8400-e29b-41d4-a716-446655440004
+    NotificationId:
+      name: notification_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+      example: 550e8400-e29b-41d4-a716-446655440005
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+      example: 550e8400-e29b-41d4-a716-446655440006
+    UserIdQuery:
+      name: user_id
+      in: query
+      required: true
+      description: ID người dùng, truyền trực tiếp do không mô tả lớp xác thực.
+      schema: {type: string, format: uuid}
+      example: 550e8400-e29b-41d4-a716-446655440000
+
+  responses:
+    BadRequest:
+      description: '400 Bad Request. Yêu cầu không hợp lệ: cú pháp JSON, tham số truy vấn hoặc định dạng UUID không
+        đúng.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Bad Request
+            status: 400
+            detail: UUID hoặc query parameter không hợp lệ.
+            code: BAD_REQUEST
+    NotFound:
+      description: 404 Not Found. Không tìm thấy tài nguyên được yêu cầu hoặc tài nguyên được tham chiếu.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: Không tìm thấy tài nguyên được yêu cầu.
+            code: NOT_FOUND
+    Conflict:
+      description: '409 Conflict. Xung đột với trạng thái tài nguyên hiện có (ví dụ: lưu trùng voucher).'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Conflict
+            status: 409
+            detail: Voucher đã được lưu trước đó.
+            code: RESOURCE_CONFLICT
+    UnsupportedMediaType:
+      description: 415 Unsupported Media Type. Content-Type không được hỗ trợ; yêu cầu application/json.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Unsupported Media Type
+            status: 415
+            detail: Chỉ chấp nhận application/json.
+            code: UNSUPPORTED_MEDIA_TYPE
+    UnprocessableContent:
+      description: 422 Unprocessable Content. JSON hợp lệ nhưng nội dung vi phạm quy tắc dữ liệu hoặc nghiệp 
+        vụ.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Unprocessable Content
+            status: 422
+            detail: Dữ liệu không thỏa mãn quy tắc nghiệp vụ.
+            code: VALIDATION_ERROR
+    InternalServerError:
+      description: 500 Internal Server Error. Có lỗi không mong muốn ở phía máy chủ.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Internal Server Error
+            status: 500
+            detail: Máy chủ gặp lỗi không mong muốn.
+            code: INTERNAL_SERVER_ERROR
+    ServiceUnavailable:
+      description: 503 Service Unavailable. Tác vụ không thể được tiếp nhận vì dịch vụ xử lý tạm thời không 
+        khả dụng.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: about:blank
+            title: Service Unavailable
+            status: 503
+            detail: Hàng đợi đồng bộ hiện không khả dụng.
+            code: SERVICE_UNAVAILABLE
+
+  schemas:
+    ProblemDetails:
+      type: object
+      description: RFC 9457 Problem Details. status phải trùng mã HTTP trên status line.
+      required:
+      - type
+      - title
+      - status
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          default: about:blank
+          description: URI định danh loại lỗi.
+        title:
+          type: string
+          description: Tiêu đề ngắn gọn mô tả nhóm lỗi.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          description: HTTP status code; phải khớp status của response.
+        detail:
+          type: string
+          description: Thông tin cụ thể của lỗi, không chứa dữ liệu nhạy cảm.
+        instance:
+          type: string
+          format: uri-reference
+          description: URI xác định request bị lỗi (tùy chọn).
+        code:
+          type: string
+          description: Mã lỗi nghiệp vụ riêng của DealHunter (phần mở rộng RFC 9457).
+
+    Platform:
+      type: object
+      description: Bảng platforms. external_merchant_id là trường tùy chọn chờ xác minh từ AccessTrade API.
+      required: [id, name, slug, status, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid, readOnly: true}
+        external_merchant_id: {type: string, maxLength: 100, nullable: true}
+        name: {type: string, maxLength: 255}
+        slug: {type: string, maxLength: 90}
+        logo_url: {type: string, nullable: true}
+        base_url: {type: string, nullable: true}
+        status: {type: string, maxLength: 20, default: ACTIVE}
+        created_at: {type: string, format: date-time, readOnly: true}
+        updated_at: {type: string, format: date-time, readOnly: true}
+
+    Voucher:
+      type: object
+      description: |
+        Bảng vouchers. UNIQUE(platform_id, dedup_key) chống trùng khi đồng bộ.
+        Mỗi lần ưu đãi tăng thực sự, discount_version tăng thêm 1 và
+        hệ thống sinh event_key dạng DEAL_IMPROVED:{version}.
+        Các trường source_external_id, campaign_id, category_name,
+        percentage_used được để nullable đến khi xác minh AccessTrade API.
+      required:
+      - id
+      - platform_id
+      - dedup_key
+      - title
+      - discount_type
+      - status
+      - discount_version
+      - created_at
+      - updated_at
+      properties:
+        id: {type: string, format: uuid, readOnly: true}
+        platform_id: {type: string, format: uuid}
+        dedup_key: {type: string, maxLength: 128}
+        source_external_id: {type: string, maxLength: 100, nullable: true}
+        campaign_id: {type: string, maxLength: 100, nullable: true}
+        code: {type: string, maxLength: 100, nullable: true}
+        normalized_code: {type: string, maxLength: 100, nullable: true}
+        title: {type: string, maxLength: 255}
+        description: {type: string, nullable: true}
+        category_name: {type: string, maxLength: 100, nullable: true}
+        discount_type: {type: string, maxLength: 30}
+        discount_value: {type: number, multipleOf: 0.01, nullable: true}
+        min_order_value: {type: number, multipleOf: 0.01, nullable: true}
+        max_discount: {type: number, multipleOf: 0.01, nullable: true}
+        percentage_used: {type: integer, nullable: true}
+        start_date: {type: string, format: date-time, nullable: true}
+        expiry_date: {type: string, format: date-time, nullable: true}
+        source_url: {type: string, nullable: true}
+        image_url: {type: string, nullable: true}
+        status: {type: string, maxLength: 20, default: ACTIVE}
+        discount_version: {type: integer, minimum: 0, default: 0}
+        last_verified_at: {type: string, format: date-time, nullable: true}
+        created_at: {type: string, format: date-time, readOnly: true}
+        updated_at: {type: string, format: date-time, readOnly: true}
+
+    PreferenceFields:
+      type: object
+      properties:
+        platform_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: null hoặc bỏ trống nghĩa là áp dụng tất cả sàn.
+        keyword: {type: string, maxLength: 100, nullable: true}
+        discount_type: {type: string, maxLength: 30, nullable: true}
+        min_discount: {type: number, multipleOf: 0.01, nullable: true}
+        max_min_order_value: {type: number, multipleOf: 0.01, nullable: true}
+        is_active: {type: boolean, default: true}
+
+    UserPreference:
+      allOf:
+      - $ref: '#/components/schemas/PreferenceFields'
+      - type: object
+        required: [id, user_id, is_active, created_at, updated_at]
+        properties:
+          id: {type: string, format: uuid, readOnly: true}
+          user_id: {type: string, format: uuid}
+          created_at: {type: string, format: date-time, readOnly: true}
+          updated_at: {type: string, format: date-time, readOnly: true}
+
+    PreferenceCreate:
+      allOf:
+      - $ref: '#/components/schemas/PreferenceFields'
+      - type: object
+        required: [user_id]
+        properties:
+          user_id: {type: string, format: uuid}
+
+    PreferenceUpdate:
+      allOf:
+      - $ref: '#/components/schemas/PreferenceFields'
+      description: Chỉ gửi các trường cần thay đổi (PATCH).
+
+    SavedVoucher:
+      type: object
+      description: Bảng user_saved_vouchers. UNIQUE(user_id, voucher_id).
+      required: [id, user_id, voucher_id, created_at]
+      properties:
+        id: {type: string, format: uuid, readOnly: true}
+        user_id: {type: string, format: uuid}
+        voucher_id: {type: string, format: uuid}
+        created_at: {type: string, format: date-time, readOnly: true}
+
+    SavedVoucherCreate:
+      type: object
+      required: [user_id, voucher_id]
+      properties:
+        user_id: {type: string, format: uuid}
+        voucher_id: {type: string, format: uuid}
+
+    Notification:
+      type: object
+      description: |
+        Bảng notifications. UNIQUE(user_id, voucher_id, event_key).
+        Với ưu đãi được nâng cấp, event_key có dạng DEAL_IMPROVED:{version}.
+      required:
+      - id
+      - user_id
+      - voucher_id
+      - notification_type
+      - event_key
+      - title
+      - message
+      - is_read
+      - created_at
+      properties:
+        id: {type: string, format: uuid, readOnly: true}
+        user_id: {type: string, format: uuid}
+        voucher_id: {type: string, format: uuid}
+        notification_type: {type: string, maxLength: 30}
+        event_key: {type: string, maxLength: 150}
+        old_discount_value: {type: number, multipleOf: 0.01, nullable: true}
+        new_discount_value: {type: number, multipleOf: 0.01, nullable: true}
+        title: {type: string, maxLength: 255}
+        message: {type: string}
+        is_read: {type: boolean, default: false}
+        created_at: {type: string, format: date-time, readOnly: true}
+
+    CollectionRun:
+      type: object
+      description: Bảng collection_runs; platform_id nullable tương ứng tất cả sàn.
+      required:
+      - id
+      - source_type
+      - triggered_by
+      - status
+      - total_fetched
+      - inserted_count
+      - updated_count
+      - started_at
+      properties:
+        id: {type: string, format: uuid, readOnly: true}
+        platform_id: {type: string, format: uuid, nullable: true}
+        source_type: {type: string, maxLength: 30, default: ACCESSTRADE}
+        triggered_by: {type: string, maxLength: 30}
+        status: {type: string, maxLength: 20}
+        total_fetched: {type: integer, minimum: 0, default: 0}
+        inserted_count: {type: integer, minimum: 0, default: 0}
+        updated_count: {type: integer, minimum: 0, default: 0}
+        error_message: {type: string, nullable: true}
+        started_at: {type: string, format: date-time, readOnly: true}
+        finished_at: {type: string, format: date-time, nullable: true, readOnly: true}
+
+    CollectionRunCreate:
+      type: object
+      description: Yêu cầu thực hiện đồng bộ thủ công; source_type mặc định ACCESSTRADE.
+      properties:
+        platform_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: null hoặc bỏ trống để đồng bộ mọi sàn.
