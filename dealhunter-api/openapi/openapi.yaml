@@ -747,7 +747,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Access token gửi qua header `Authorization: Bearer <access_token>`.
+      description: "Access token gửi qua header `Authorization: Bearer <access_token>`."
   parameters:
     PlatformId:
       name: platform_id
