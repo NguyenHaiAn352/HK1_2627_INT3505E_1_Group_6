@@ -9,3 +9,4 @@ celery
 gunicorn
 flasgger
 python-dotenv
+connexion
